@@ -14,6 +14,14 @@ export const bicepsCurlDetector: ExerciseDetector<CurlState> = {
   id: 'biceps-curl',
   name: 'Подъем на бицепс',
   description: 'Счет повторений сгибаний рук в локтях.',
+  voiceAliases: [
+    'бицепс',
+    'подъем на бицепс',
+    'подъемы на бицепс',
+    'сгибание рук',
+    'сгибания рук',
+    'подъем гантели на бицепс',
+  ],
   createState: () => ({ phase: 'down' }),
   update: (landmarks, state) => {
     const leftShoulder = getPoint(landmarks, POSE_INDEX.leftShoulder, VISIBILITY)

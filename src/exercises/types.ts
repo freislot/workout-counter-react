@@ -14,6 +14,7 @@ export interface ExerciseDetector<TState extends object = ExerciseState> {
   id: string
   name: string
   description: string
+  voiceAliases?: string[]
   createState(): TState
   update(landmarks: PoseLandmarks | null, state: TState): DetectorResult<TState>
 }

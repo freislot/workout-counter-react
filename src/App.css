@@ -82,6 +82,30 @@
   color: #b91c1c;
 }
 
+.voice-state {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid #d1d5db;
+  background: #f9fafb;
+}
+
+.voice-state.listening {
+  color: #075985;
+  border-color: #38bdf8;
+  background: #f0f9ff;
+}
+
+.voice-state.blocked,
+.voice-state.error {
+  color: #b91c1c;
+  border-color: #fca5a5;
+  background: #fef2f2;
+}
+
+.voice-state.unsupported {
+  color: #6b7280;
+}
+
 .stage {
   border: 1px solid #d1d5db;
   border-radius: 12px;

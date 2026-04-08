@@ -14,6 +14,7 @@ export const squatDetector: ExerciseDetector<SquatState> = {
   id: 'squat',
   name: 'Приседания',
   description: 'Счет повторений приседаний по углу колена.',
+  voiceAliases: ['присед', 'приседания', 'приседание'],
   createState: () => ({ phase: 'standing' }),
   update: (landmarks, state) => {
     const leftHip = getPoint(landmarks, POSE_INDEX.leftHip, VISIBILITY)
