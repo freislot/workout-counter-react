@@ -54,6 +54,7 @@ const REST_MINUTE_COMMANDS: Array<{ minutes: number; phrases: string[] }> = [
   { minutes: 3, phrases: ['отдых 3', 'отдых 3 минуты', 'отдых три минуты'] },
   { minutes: 5, phrases: ['отдых 5', 'отдых 5 минут', 'отдых пять минут'] },
 ]
+const COMMAND_COOLDOWN_MS = 900
 
 function normalizeSpeechText(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim()
@@ -117,6 +118,7 @@ function App() {
   const shutdownRef = useRef(shutdown)
   const recognitionRef = useRef<SpeechRecognition | null>(null)
   const shouldRestartRef = useRef(false)
+  const lastCommandRef = useRef<{ key: string; at: number } | null>(null)
 
   useEffect(() => {
     isRunningRef.current = isRunning
@@ -143,7 +145,7 @@ function App() {
     const recognition = new SpeechRecognitionCtor()
     recognition.lang = 'ru-RU'
     recognition.continuous = true
-    recognition.interimResults = false
+    recognition.interimResults = true
 
     shouldRestartRef.current = true
     recognitionRef.current = recognition
@@ -154,7 +156,7 @@ function App() {
 
     recognition.onresult = (event) => {
       const firstResult = event.results[event.resultIndex]
-      if (!firstResult?.isFinal || firstResult.length === 0) {
+      if (!firstResult || firstResult.length === 0) {
         return
       }
 
@@ -163,12 +165,28 @@ function App() {
         return
       }
 
+      const runCommand = (key: string, action: () => void) => {
+        const now = Date.now()
+        if (
+          lastCommandRef.current &&
+          lastCommandRef.current.key === key &&
+          now - lastCommandRef.current.at < COMMAND_COOLDOWN_MS
+        ) {
+          return
+        }
+
+        lastCommandRef.current = { key, at: now }
+        action()
+      }
+
       const isStartCommand = START_COMMANDS.some((command) =>
         matchesCommand(transcript, command),
       )
 
       if (isStartCommand && !isRunningRef.current && isModelReadyRef.current) {
-        void startRef.current()
+        runCommand('start', () => {
+          void startRef.current()
+        })
         return
       }
 
@@ -176,7 +194,7 @@ function App() {
         matchesCommand(transcript, command),
       )
       if (isPauseCommand && isRunningRef.current) {
-        pauseRef.current()
+        runCommand('pause', () => pauseRef.current())
         return
       }
 
@@ -184,7 +202,7 @@ function App() {
         matchesCommand(transcript, command),
       )
       if (isResetCommand) {
-        resetRef.current()
+        runCommand('reset', () => resetRef.current())
         return
       }
 
@@ -192,14 +210,16 @@ function App() {
         matchesCommand(transcript, command),
       )
       if (isShutdownCommand && (isRunningRef.current || isCameraReadyRef.current)) {
-        shutdownRef.current()
+        runCommand('shutdown', () => shutdownRef.current())
         return
       }
 
       for (const option of REST_MINUTE_COMMANDS) {
         if (option.phrases.some((phrase) => matchesCommand(transcript, phrase))) {
-          setRestDurationMinutes(option.minutes)
-          shutdownRef.current(option.minutes * 60_000)
+          runCommand(`rest-${option.minutes}`, () => {
+            setRestDurationMinutes(option.minutes)
+            shutdownRef.current(option.minutes * 60_000)
+          })
           return
         }
       }
@@ -210,7 +230,7 @@ function App() {
 
       for (const [phrase, nextExerciseId] of commandExerciseLookup) {
         if (matchesCommand(transcript, phrase)) {
-          setExerciseId(nextExerciseId)
+          runCommand(`exercise-${nextExerciseId}`, () => setExerciseId(nextExerciseId))
           return
         }
       }
