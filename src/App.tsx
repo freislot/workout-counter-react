@@ -55,6 +55,7 @@ const REST_MINUTE_COMMANDS: Array<{ minutes: number; phrases: string[] }> = [
   { minutes: 5, phrases: ['отдых 5', 'отдых 5 минут', 'отдых пять минут'] },
 ]
 const COMMAND_COOLDOWN_MS = 900
+const REST_COMMAND_COOLDOWN_MS = 4_000
 
 function normalizeSpeechText(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim()
@@ -165,12 +166,12 @@ function App() {
         return
       }
 
-      const runCommand = (key: string, action: () => void) => {
+      const runCommand = (key: string, action: () => void, cooldownMs = COMMAND_COOLDOWN_MS) => {
         const now = Date.now()
         if (
           lastCommandRef.current &&
           lastCommandRef.current.key === key &&
-          now - lastCommandRef.current.at < COMMAND_COOLDOWN_MS
+          now - lastCommandRef.current.at < cooldownMs
         ) {
           return
         }
@@ -219,7 +220,7 @@ function App() {
           runCommand(`rest-${option.minutes}`, () => {
             setRestDurationMinutes(option.minutes)
             shutdownRef.current(option.minutes * 60_000)
-          })
+          }, REST_COMMAND_COOLDOWN_MS)
           return
         }
       }
