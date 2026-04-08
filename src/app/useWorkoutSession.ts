@@ -97,6 +97,30 @@ function speakRussianCount(value: number): void {
   window.speechSynthesis.speak(utterance)
 }
 
+function clearCanvas(canvas: HTMLCanvasElement | null): void {
+  if (!canvas) {
+    return
+  }
+
+  const ctx = canvas.getContext('2d')
+  if (!ctx) {
+    return
+  }
+
+  const dpr = window.devicePixelRatio || 1
+  const cssWidth = canvas.clientWidth
+  const cssHeight = canvas.clientHeight
+  const nextWidth = Math.round(cssWidth * dpr)
+  const nextHeight = Math.round(cssHeight * dpr)
+
+  if (nextWidth > 0 && nextHeight > 0 && (canvas.width !== nextWidth || canvas.height !== nextHeight)) {
+    canvas.width = nextWidth
+    canvas.height = nextHeight
+  }
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height)
+}
+
 export function useWorkoutSession(selectedExerciseId: string) {
   const memoryVideoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -204,8 +228,13 @@ export function useWorkoutSession(selectedExerciseId: string) {
   }, [detector])
 
   const shutdown = useCallback(() => {
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
     setIsRunning(false)
     stopCamera()
+    clearCanvas(canvasRef.current)
   }, [stopCamera])
 
   useEffect(() => shutdown, [shutdown])
