@@ -48,6 +48,9 @@ function App() {
       </section>
 
       <section className="status-bar">
+        <span className={`model-state ${isModelReady ? 'ready' : 'loading'}`}>
+          Модель: {isModelReady ? 'загружена' : 'загружается'}
+        </span>
         <span className={`camera-state ${isCameraReady ? 'ready' : 'off'}`}>
           Camera: {isCameraReady ? 'ready' : 'off'}
         </span>
