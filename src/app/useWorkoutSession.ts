@@ -13,6 +13,90 @@ const DEFAULT_RUNTIME: ExerciseRuntimeState = {
   isBodyDetected: false,
 }
 
+const RU_UNITS = [
+  'ноль',
+  'один',
+  'два',
+  'три',
+  'четыре',
+  'пять',
+  'шесть',
+  'семь',
+  'восемь',
+  'девять',
+  'десять',
+  'одиннадцать',
+  'двенадцать',
+  'тринадцать',
+  'четырнадцать',
+  'пятнадцать',
+  'шестнадцать',
+  'семнадцать',
+  'восемнадцать',
+  'девятнадцать',
+]
+
+const RU_TENS = [
+  '',
+  '',
+  'двадцать',
+  'тридцать',
+  'сорок',
+  'пятьдесят',
+  'шестьдесят',
+  'семьдесят',
+  'восемьдесят',
+  'девяносто',
+]
+
+const RU_HUNDREDS = [
+  '',
+  'сто',
+  'двести',
+  'триста',
+  'четыреста',
+  'пятьсот',
+  'шестьсот',
+  'семьсот',
+  'восемьсот',
+  'девятьсот',
+]
+
+function numberToRussianWords(value: number): string {
+  const safeValue = Math.max(0, Math.trunc(value))
+  if (safeValue < 20) {
+    return RU_UNITS[safeValue]
+  }
+
+  if (safeValue < 100) {
+    const tens = Math.floor(safeValue / 10)
+    const units = safeValue % 10
+    return units > 0 ? `${RU_TENS[tens]} ${RU_UNITS[units]}` : RU_TENS[tens]
+  }
+
+  if (safeValue < 1000) {
+    const hundreds = Math.floor(safeValue / 100)
+    const rest = safeValue % 100
+    return rest > 0 ? `${RU_HUNDREDS[hundreds]} ${numberToRussianWords(rest)}` : RU_HUNDREDS[hundreds]
+  }
+
+  return String(safeValue)
+}
+
+function speakRussianCount(value: number): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return
+  }
+
+  const utterance = new SpeechSynthesisUtterance(numberToRussianWords(value))
+  utterance.lang = 'ru-RU'
+  utterance.rate = 1
+  utterance.pitch = 1
+
+  window.speechSynthesis.cancel()
+  window.speechSynthesis.speak(utterance)
+}
+
 export function useWorkoutSession(selectedExerciseId: string) {
   const memoryVideoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -84,6 +168,10 @@ export function useWorkoutSession(selectedExerciseId: string) {
         isBodyDetected: Boolean(frame.landmarks) && result.confidence > 0,
       }
       runtimeRef.current = nextRuntime
+
+      if (result.repDelta > 0) {
+        speakRussianCount(nextRuntime.reps)
+      }
 
       drawFrame(canvas, video, frame.landmarks, nextRuntime)
       rafRef.current = requestAnimationFrame(renderFrame)
