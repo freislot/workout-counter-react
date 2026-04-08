@@ -47,6 +47,13 @@ const START_COMMANDS = ['старт', 'начинаем упражнение', '
 const PAUSE_COMMANDS = ['пауза', 'поставь на паузу', 'остановись']
 const RESET_COMMANDS = ['сброс', 'сбросить', 'обнулить', 'сбрось']
 const SHUTDOWN_COMMANDS = ['стоп', 'стоп камера', 'выключи камеру']
+const REST_DURATION_OPTIONS = [1, 2, 3, 5] as const
+const REST_MINUTE_COMMANDS: Array<{ minutes: number; phrases: string[] }> = [
+  { minutes: 1, phrases: ['отдых 1', 'отдых 1 минута', 'отдых 1 минуту', 'отдых одна минута'] },
+  { minutes: 2, phrases: ['отдых 2', 'отдых 2 минуты', 'отдых две минуты'] },
+  { minutes: 3, phrases: ['отдых 3', 'отдых 3 минуты', 'отдых три минуты'] },
+  { minutes: 5, phrases: ['отдых 5', 'отдых 5 минут', 'отдых пять минут'] },
+]
 
 function normalizeSpeechText(value: string): string {
   return value.toLowerCase().replace(/[^\p{L}\p{N}\s-]/gu, ' ').replace(/\s+/g, ' ').trim()
@@ -72,6 +79,7 @@ function getInitialVoiceStatus(): VoiceStatus {
 
 function App() {
   const [exerciseId, setExerciseId] = useState(exerciseRegistry[0].id)
+  const [restDurationMinutes, setRestDurationMinutes] = useState<number>(3)
   const {
     canvasRef,
     isRunning,
@@ -82,7 +90,7 @@ function App() {
     pause,
     reset,
     shutdown,
-  } = useWorkoutSession(exerciseId)
+  } = useWorkoutSession(exerciseId, restDurationMinutes * 60_000)
   const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>(() => getInitialVoiceStatus())
 
   const commandExerciseLookup = useMemo(() => {
@@ -188,6 +196,14 @@ function App() {
         return
       }
 
+      for (const option of REST_MINUTE_COMMANDS) {
+        if (option.phrases.some((phrase) => matchesCommand(transcript, phrase))) {
+          setRestDurationMinutes(option.minutes)
+          shutdownRef.current(option.minutes * 60_000)
+          return
+        }
+      }
+
       if (isRunningRef.current) {
         return
       }
@@ -275,7 +291,19 @@ function App() {
           Пауза
         </button>
         <button onClick={reset}>Сброс</button>
-        <button onClick={shutdown}>Стоп камера</button>
+        <button onClick={() => shutdown()}>Стоп камера</button>
+        <label htmlFor="rest-duration-select">Отдых</label>
+        <select
+          id="rest-duration-select"
+          value={restDurationMinutes}
+          onChange={(event) => setRestDurationMinutes(Number(event.target.value))}
+        >
+          {REST_DURATION_OPTIONS.map((minutes) => (
+            <option key={minutes} value={minutes}>
+              {minutes} мин
+            </option>
+          ))}
+        </select>
       </section>
 
       <section className="status-bar">

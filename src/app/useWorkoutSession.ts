@@ -3,7 +3,7 @@ import { useCameraStream } from '../camera/useCameraStream'
 import { getExerciseById } from '../exercises/registry'
 import type { ExerciseRuntimeState, ExerciseState } from '../exercises/types'
 import { PoseLandmarkerService } from '../pose/poseLandmarkerService'
-import { drawFrame } from '../render/canvasRenderer'
+import { drawFrame, drawRestCountdown } from '../render/canvasRenderer'
 
 const DEFAULT_RUNTIME: ExerciseRuntimeState = {
   reps: 0,
@@ -12,7 +12,6 @@ const DEFAULT_RUNTIME: ExerciseRuntimeState = {
   metrics: {},
   isBodyDetected: false,
 }
-
 const RU_UNITS = [
   'ноль',
   'один',
@@ -97,6 +96,25 @@ function speakRussianCount(value: number): void {
   window.speechSynthesis.speak(utterance)
 }
 
+function speakRussianText(text: string): void {
+  if (typeof window === 'undefined' || !('speechSynthesis' in window)) {
+    return
+  }
+
+  const synth = window.speechSynthesis
+  const utterance = new SpeechSynthesisUtterance(text)
+  utterance.lang = 'ru-RU'
+  utterance.rate = 1
+  utterance.pitch = 1
+
+  // Some browsers drop utterances fired in media/recognition callbacks.
+  setTimeout(() => {
+    synth.cancel()
+    synth.resume()
+    synth.speak(utterance)
+  }, 10)
+}
+
 function clearCanvas(canvas: HTMLCanvasElement | null): void {
   if (!canvas) {
     return
@@ -121,19 +139,26 @@ function clearCanvas(canvas: HTMLCanvasElement | null): void {
   ctx.clearRect(0, 0, canvas.width, canvas.height)
 }
 
-export function useWorkoutSession(selectedExerciseId: string) {
+export function useWorkoutSession(selectedExerciseId: string, restDurationMs: number) {
   const memoryVideoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const rafRef = useRef<number | null>(null)
+  const restRafRef = useRef<number | null>(null)
+  const restCountdownVersionRef = useRef(0)
   const poseServiceRef = useRef(new PoseLandmarkerService())
   const detectorStateRef = useRef<ExerciseState>({})
   const runtimeRef = useRef<ExerciseRuntimeState>(DEFAULT_RUNTIME)
+  const restDurationMsRef = useRef(restDurationMs)
 
   const [isModelReady, setIsModelReady] = useState(false)
   const [isRunning, setIsRunning] = useState(false)
   const { startCamera, stopCamera, cameraError, isCameraReady } = useCameraStream()
 
   const detector = useMemo(() => getExerciseById(selectedExerciseId), [selectedExerciseId])
+
+  useEffect(() => {
+    restDurationMsRef.current = restDurationMs
+  }, [restDurationMs])
 
   useEffect(() => {
     memoryVideoRef.current = document.createElement('video')
@@ -170,6 +195,11 @@ export function useWorkoutSession(selectedExerciseId: string) {
         rafRef.current = null
       }
       return
+    }
+
+    if (restRafRef.current) {
+      cancelAnimationFrame(restRafRef.current)
+      restRafRef.current = null
     }
 
     const renderFrame = () => {
@@ -211,6 +241,11 @@ export function useWorkoutSession(selectedExerciseId: string) {
   }, [detector, isRunning])
 
   const start = useCallback(async () => {
+    if (restRafRef.current) {
+      cancelAnimationFrame(restRafRef.current)
+      restRafRef.current = null
+    }
+    restCountdownVersionRef.current += 1
     await startCamera(memoryVideoRef.current)
     detectorStateRef.current = detector.createState()
     runtimeRef.current = DEFAULT_RUNTIME
@@ -227,17 +262,65 @@ export function useWorkoutSession(selectedExerciseId: string) {
     runtimeRef.current = DEFAULT_RUNTIME
   }, [detector])
 
-  const shutdown = useCallback(() => {
+  const stopSession = useCallback(
+    (withRestCountdown: boolean, restDurationOverrideMs?: number) => {
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current)
       rafRef.current = null
     }
+    if (restRafRef.current) {
+      cancelAnimationFrame(restRafRef.current)
+      restRafRef.current = null
+    }
+    restCountdownVersionRef.current += 1
     setIsRunning(false)
     stopCamera()
     clearCanvas(canvasRef.current)
-  }, [stopCamera])
 
-  useEffect(() => shutdown, [shutdown])
+    if (!withRestCountdown) {
+      return
+    }
+
+    const countdownDurationMs = restDurationOverrideMs ?? restDurationMsRef.current
+    const durationMinutes = Math.max(1, Math.round(countdownDurationMs / 60000))
+    speakRussianText(`Отдыхаем ${numberToRussianWords(durationMinutes)} минут`)
+    const countdownVersion = restCountdownVersionRef.current
+    const restStartedAt = performance.now()
+    let isFinishAnnounced = false
+    const restTick = (now: number) => {
+      if (countdownVersion !== restCountdownVersionRef.current) {
+        return
+      }
+
+      const elapsed = now - restStartedAt
+      const remaining = Math.max(0, countdownDurationMs - elapsed)
+      const canvas = canvasRef.current
+      if (canvas) {
+        drawRestCountdown(canvas, remaining, countdownDurationMs)
+      }
+
+      if (remaining > 0) {
+        restRafRef.current = requestAnimationFrame(restTick)
+      } else {
+        if (!isFinishAnnounced) {
+          speakRussianText('Ебашим')
+          isFinishAnnounced = true
+        }
+        restRafRef.current = null
+      }
+    }
+    restRafRef.current = requestAnimationFrame(restTick)
+    },
+    [stopCamera],
+  )
+
+  const shutdown = useCallback((restDurationOverrideMs?: number) => {
+    stopSession(true, restDurationOverrideMs)
+  }, [stopSession])
+
+  useEffect(() => {
+    return () => stopSession(false)
+  }, [stopSession])
 
   return {
     canvasRef,
